@@ -1,103 +1,128 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
+const washingMachine = require('./config/database');
 
 app.use(cors());
 app.use(express.json());
 
-let washingMachines = [
-  {
-    id: 1,
-    name: 'เครื่องซักผ้า',
-    imageNormal: '/images/washing_normal.png',
-    imageUse: '/images/washing_use.gif',
-    time: 10,
-    status: false
-  },
-  {
-    id: 2,
-    name: 'เครื่องซักผ้า',
-    imageNormal: '/images/washing_normal.png',
-    imageUse: '/images/washing_use.gif',
-    time: 10,
-    status: false
-  }
-];
-
-// POST
-app.post('/washing', (req, res) => {
-  console.log('POST', req.body);
-  const newMachine = {
-    id: washingMachines.length + 1,
-    name: req.body.name || 'เครื่องซักผ้า',
-    imageNormal: req.body.imageNormal || '/images/washing_normal.png',
-    imageUse: req.body.imageUse || '/images/washing_use.gif',
-    time: req.body.time || 10,
-    status: false
-  };
-  washingMachines.push(newMachine);
-  res.status(201).json(newMachine);
-});
-
-// Get All 
-app.get('/washing', (req, res) => {
-  console.log('GET', washingMachines);
-  res.json(washingMachines);
-});
-
-// Get ID
-app.get('/washing/:id', (req, res) => {
-  console.log('GET ID', req.params.id);
-  const id = parseInt(req.params.id);
-  const machine = washingMachines.find(m => m.id === id);
-  if (machine) {
-    res.json(machine);
-  } else {
-    res.status(404).json({ message: `ไม่พบเครื่องซักผ้าหมายเลข ${id}` });
+// POST - เพิ่มเครื่องซักผ้าใหม่
+app.post('/washing', async (req, res) => {
+  try {
+    const [result] = await washingMachine.query(
+      'INSERT INTO washing_machines (name, imageNormal, imageUse, time, status) VALUES (?, ?, ?, ?, ?)',
+      [
+        'เครื่องซักผ้า',
+        '/images/washing_normal.png',
+        '/images/washing_use.gif',
+        10,
+        false
+      ]
+    );
+    
+    const [newMachine] = await washingMachine.query(
+      'SELECT * FROM washing_machines WHERE id = ?',
+      [result.insertId]
+    );
+    
+    res.status(201).json(newMachine[0]);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการเพิ่มเครื่องซักผ้า' });
   }
 });
 
-// UPDATE (U) 
-app.put('/washing/:id', (req, res) => {
-  console.log('UPDATE ', req.params.id);
-  const id = parseInt(req.params.id);
-  const machineIndex = washingMachines.findIndex(m => m.id === id);
-  if (machineIndex !== -1) {
-    washingMachines[machineIndex] = {
-      ...washingMachines[machineIndex],
-      ...req.body,
-      id: id
-    };
-    res.json(washingMachines[machineIndex]);
-  } else {
-    res.status(404).json({ message: `ไม่พบเครื่องซักผ้าหมายเลข ${id}` });
+// GET - ดึงข้อมูลทั้งหมด
+app.get('/washing', async (req, res) => {
+  try {
+    const [rows] = await washingMachine.query('SELECT * FROM washing_machines');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูล' });
   }
 });
 
-// Post Status  
-app.post('/washing/:id/status', (req, res) => {
-  console.log('POST Status', req.params.id, req.body.status, req.body.time);
-  const id = parseInt(req.params.id);
-  const machine = washingMachines.find(m => m.id === id);
-  if (machine) {
-    machine.status = req.body.status;
-    machine.time = req.body.time;
-    res.json(machine);
-  } else {
-    res.status(404).json({ message: `ไม่พบเครื่องซักผ้าหมายเลข ${id}` });
+// GET ONE - ดึงข้อมูลตาม ID
+app.get('/washing/:id', async (req, res) => {
+  try {
+    const [rows] = await washingMachine.query(
+      'SELECT * FROM washing_machines WHERE id = ?',
+      [req.params.id]
+    );
+    if (rows.length > 0) {
+      res.json(rows[0]);
+    } else {
+      res.status(404).json({ message: 'ไม่พบเครื่องซักผ้า' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูล' });
   }
 });
 
-// DELETE 
-app.delete('/washing/:id', (req, res) => {
-  console.log('DELETE', req.params.id);
-  const id = parseInt(req.params.id);
-  const machineIndex = washingMachines.findIndex(m => m.id === id);
-  if (machineIndex !== -1) {
-    const deletedMachine = washingMachines.splice(machineIndex, 1);
-    res.json({ message: `ลบเครื่องซักผ้าหมายเลข ${id} สำเร็จ`, deletedMachine });
-  } else {
-    res.status(404).json({ message: `ไม่พบเครื่องซักผ้าหมายเลข ${id}` });
+// PUT - อัพเดทข้อมูล
+app.put('/washing/:id', async (req, res) => {
+  try {
+    const [result] = await washingMachine.query(
+      'UPDATE washing_machines SET name = ? WHERE id = ?',
+      [req.body.name, req.params.id]
+    );
+    
+    if (result.affectedRows > 0) {
+      const [updated] = await washingMachine.query(
+        'SELECT * FROM washing_machines WHERE id = ?',
+        [req.params.id]
+      );
+      res.json(updated[0]);
+    } else {
+      res.status(404).json({ message: 'ไม่พบเครื่องซักผ้า' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการอัพเดทข้อมูล' });
+  }
+});
+
+// DELETE - ลบเครื่องซักผ้า
+app.delete('/washing/:id', async (req, res) => {
+  try {
+    const [result] = await washingMachine.query(
+      'DELETE FROM washing_machines WHERE id = ?',
+      [req.params.id]
+    );
+    
+    if (result.affectedRows > 0) {
+      res.json({ message: 'ลบเครื่องซักผ้าสำเร็จ' });
+    } else {
+      res.status(404).json({ message: 'ไม่พบเครื่องซักผ้า' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการลบข้อมูล' });
+  }
+});
+
+// PUT - อัพเดทสถานะ
+app.put('/washing/:id/status', async (req, res) => {
+  try {
+    const [result] = await washingMachine.query(
+      'UPDATE washing_machines SET status = ?, time = ? WHERE id = ?',
+      [req.body.status, req.body.time, req.params.id]
+    );
+    
+    if (result.affectedRows > 0) {
+      const [updated] = await washingMachine.query(
+        'SELECT * FROM washing_machines WHERE id = ?',
+        [req.params.id]
+      );
+      res.json(updated[0]);
+    } else {
+      res.status(404).json({ message: 'ไม่พบเครื่องซักผ้า' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการอัพเดทสถานะ' });
   }
 });
 
