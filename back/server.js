@@ -1,7 +1,32 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 const app = express();
 const washingMachine = require('./config/database');
+
+// Line Notify token
+const LINE_NOTIFY_TOKEN = 'GlmLMTEIP4heqCDytFi9OL5nJRn99lJE75jf1tXbo9l';
+
+// เก็บสถานะการแจ้งเตือนของแต่ละเครื่อง
+const notificationSent = new Map();
+
+// ฟังก์ชันส่งแจ้งเตือน Line
+const sendLineNotify = async (message) => {
+  try {
+    await axios.post('https://notify-api.line.me/api/notify', 
+      `message=${message}`,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Bearer ${LINE_NOTIFY_TOKEN}`
+        }
+      }
+    );
+    console.log('ส่งแจ้งเตือน Line ');
+  } catch (error) {
+    console.error('Error sending Line notification:', error);
+  }
+};
 
 app.use(cors());
 app.use(express.json());
@@ -103,19 +128,33 @@ app.delete('/washing/:id', async (req, res) => {
   }
 });
 
-// PUT - อัพเดทสถานะ
-app.put('/washing/:id/status', async (req, res) => {
+// PUT - อัพเดทสถานะและส่งแจ้งเตือน
+app.post('/washing/:id/status', async (req, res) => {
   try {
+    const machineId = req.params.id;
     const [result] = await washingMachine.query(
       'UPDATE washing_machines SET status = ?, time = ? WHERE id = ?',
-      [req.body.status, req.body.time, req.params.id]
+      [req.body.status, req.body.time, machineId]
     );
     
     if (result.affectedRows > 0) {
       const [updated] = await washingMachine.query(
         'SELECT * FROM washing_machines WHERE id = ?',
-        [req.params.id]
+        [machineId]
       );
+
+
+      if (req.body.status && req.body.time < 5 && !notificationSent.get(machineId)) {
+        await sendLineNotify(
+          `⏰ เครื่องซักผ้าเครื่องที่ ${machineId} ใกล้เสร็จแล้ว!`
+        );
+        notificationSent.set(machineId, true);
+      }
+
+      if (!req.body.status) {
+        notificationSent.delete(machineId);
+      }
+
       res.json(updated[0]);
     } else {
       res.status(404).json({ message: 'ไม่พบเครื่องซักผ้า' });
