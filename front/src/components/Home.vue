@@ -61,12 +61,12 @@ const handleDeposit = async (machineId) => {
     
     const response = await axios.post(`${API_URL}/washing/${machineId}/status`, {
       status: true,
-      time: 10
+      time: 120
     })
     
     if (response.data) {
       machine.status = true
-      machine.time = 10
+      machine.time = 120
       
       const timer = setInterval(async () => {
         try {
@@ -79,10 +79,10 @@ const handleDeposit = async (machineId) => {
           } else {
             await axios.post(`${API_URL}/washing/${machineId}/status`, {
               status: false,
-              time: 10
+              time: 120
             })
             machine.status = false
-            machine.time = 10
+            machine.time = 120
             clearInterval(timer)
           }
         } catch (error) {

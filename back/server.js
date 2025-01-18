@@ -40,7 +40,7 @@ app.post('/washing', async (req, res) => {
         'เครื่องซักผ้า',
         '/images/washing_normal.png',
         '/images/washing_use.gif',
-        10,
+        120,
         false
       ]
     );
@@ -144,7 +144,7 @@ app.post('/washing/:id/status', async (req, res) => {
       );
 
 
-      if (req.body.status && req.body.time < 5 && !notificationSent.get(machineId)) {
+      if (req.body.status && req.body.time < 60 && !notificationSent.get(machineId)) {
         await sendLineNotify(
           `⏰ เครื่องซักผ้าเครื่องที่ ${machineId} ใกล้เสร็จแล้ว!`
         );
