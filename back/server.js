@@ -132,26 +132,57 @@ app.delete('/washing/:id', async (req, res) => {
 app.post('/washing/:id/status', async (req, res) => {
   try {
     const machineId = req.params.id;
-    const [result] = await washingMachine.query(
-      'UPDATE washing_machines SET status = ?, time = ? WHERE id = ?',
-      [req.body.status, req.body.time, machineId]
-    );
+    const { status, time } = req.body;
     
-    if (result.affectedRows > 0) {
+    // ดึงข้อมูลเครื่องปัจจุบัน
+    const [machine] = await washingMachine.query(
+      'SELECT * FROM washing_machines WHERE id = ?',
+      [machineId]
+    );
+
+    if (machine[0]) {
+      // เช็คเงินต้องครบ 20 บาทก่อนเริ่มทำงาน
+      if (status && machine[0].coin < 20) {
+        return res.status(400).json({ 
+          message: 'กรุณาหยอดเหรียญให้ครบ 20 บาท',
+          remaining: 20 - machine[0].coin
+        });
+      }
+
+      // เมื่อเครื่องทำงานเสร็จ (time = 0)
+      if (time === 0) {
+        // รีเซ็ตเหรียญเป็น 0
+        await washingMachine.query(
+          'UPDATE washing_machines SET status = ?, time = ?, coin = 0 WHERE id = ?',
+          [false, 120, machineId]
+        );
+        
+        // แจ้งเตือนว่าซักเสร็จแล้ว
+        await sendLineNotify(`✅ เครื่องซักผ้าเครื่องที่ ${machineId} ซักเสร็จแล้ว!`);
+        notificationSent.delete(machineId);
+      } 
+      // อัพเดทสถานะและเวลาปกติ
+      else {
+        await washingMachine.query(
+          'UPDATE washing_machines SET status = ?, time = ? WHERE id = ?',
+          [status, time, machineId]
+        );
+
+        // แจ้งเตือนเมื่อเหลือ 60 วินาที
+        if (status && time === 60 && !notificationSent.get(machineId)) {
+          await sendLineNotify(`⏰ เครื่องซักผ้าเครื่องที่ ${machineId} จะเสร็จในอีก 1 นาที`);
+          notificationSent.set(machineId, true);
+        }
+      }
+
+      // ดึงข้อมูลที่อัพเดทแล้ว
       const [updated] = await washingMachine.query(
         'SELECT * FROM washing_machines WHERE id = ?',
         [machineId]
       );
 
-
-      if (req.body.status && req.body.time < 60 && !notificationSent.get(machineId)) {
-        await sendLineNotify(
-          `⏰ เครื่องซักผ้าเครื่องที่ ${machineId} ใกล้เสร็จแล้ว!`
-        );
-        notificationSent.set(machineId, true);
-      }
-
-      if (!req.body.status) {
+      // รีเซ็ตสถานะการแจ้งเตือนเมื่อเครื่องหยุดทำงาน
+      if (!status) {
         notificationSent.delete(machineId);
       }
 
@@ -162,6 +193,44 @@ app.post('/washing/:id/status', async (req, res) => {
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ message: 'เกิดข้อผิดพลาดในการอัพเดทสถานะ' });
+  }
+});
+
+// เพิ่ม endpoint สำหรับหยอดเหรียญ
+app.post('/washing/:id/coin', async (req, res) => {
+  try {
+    const machineId = req.params.id;
+    const coinValue = req.body.value; // 5 หรือ 10 บาท
+
+    // ดึงข้อมูลเครื่องปัจจุบัน
+    const [machine] = await washingMachine.query(
+      'SELECT * FROM washing_machines WHERE id = ?',
+      [machineId]
+    );
+
+    if (machine[0]) {
+      // คำนวณเงินรวม
+      const totalCoin = machine[0].coin + coinValue;
+      
+      // อัพเดทจำนวนเงิน
+      await washingMachine.query(
+        'UPDATE washing_machines SET coin = ? WHERE id = ?',
+        [totalCoin, machineId]
+      );
+
+      // ดึงข้อมูลที่อัพเดทแล้ว
+      const [updated] = await washingMachine.query(
+        'SELECT * FROM washing_machines WHERE id = ?',
+        [machineId]
+      );
+
+      res.json(updated[0]);
+    } else {
+      res.status(404).json({ message: 'ไม่พบเครื่องซักผ้า' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาด' });
   }
 });
 

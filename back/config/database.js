@@ -2,8 +2,8 @@ const mysql = require('mysql2/promise');
 
 const washingMachine = mysql.createPool({
     host: 'localhost',
-    user: 'kiadtiphong192',
-    password: 'boss12345',  
+    user: 'root',
+    password: 'boss0631298537',  
     database: 'washing'
 });
 
