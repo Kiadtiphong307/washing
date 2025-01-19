@@ -164,6 +164,7 @@ CREATE TABLE washing_machines (
     imageNormal VARCHAR(255) DEFAULT '/images/washing_normal.png',
     imageUse VARCHAR(255) DEFAULT '/images/washing_use.gif',
     time INT DEFAULT 120,
+    coin INT DEFAULT 0,
     status BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
